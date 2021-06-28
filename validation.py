@@ -13,7 +13,7 @@ import cv2
 parser = argparse.ArgumentParser(description='Deep Hashing evaluate mAP')
 parser.add_argument('--pretrained', type=float, default=1, metavar='pretrained_model',
                     help='loading pretrained model(default = None)')
-parser.add_argument('--bits', type=int, default=128, metavar='bts',
+parser.add_argument('--bits', type=int, default=64, metavar='bts',
                     help='binary bits')
 parser.add_argument('--model', type=str, default='./models/03-22-22:05_RSIR/63.pth.tar', metavar='bts',
                     help='model path')

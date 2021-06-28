@@ -129,43 +129,13 @@ class train_dataset(Dataset):
         gf2_mul_list.sort(key=lambda x: int(x))
 
         self.image1_list, self.label1_list = get_list(gf1_pan_list, data_path + '/gf1_pan/train')
-        # for i in gf1_pan_list:
-        #     path = data_path+'/gf1_pan/train'+'/{}'.format(i)
-        #     name_list = os.listdir(path)
-        #     for _,item in enumerate(name_list):
-        #         self.image1_list.append(os.path.join(path,item))
-        #         self.label1_list.append(int(i))
         self.image2_list, self.label2_list = get_list(gf1_mul_list, data_path + '/gf1_mul/train')
-        # self.image2_list = []  # gf1_pan
-        # self.label2_list = []
-        # for i in gf1_mul_list:
-        #     path = data_path + '/gf1_mul/train' + '/{}'.format(i)
-        #     name_list = os.listdir(path)
-        #     for _, item in enumerate(name_list):
-        #         self.image2_list.append(os.path.join(path, item))
-        #         self.label2_list.append(int(i))
         self.image3_list, self.label3_list = get_list(gf2_mul_list, data_path + '/gf2_mul/train')
-        # self.image3_list = []  # gf1_pan
-        # self.label3_list = []
-        # for i in gf2_mul_list:
-        #     path = data_path + '/gf2_mul/train' + '/{}'.format(i)
-        #     name_list = os.listdir(path)
-        #     for _, item in enumerate(name_list):
-        #         self.image3_list.append(os.path.join(path, item))
-        #         self.label3_list.append(int(i))
         self.transform = transform
         self.len = len(self.image1_list)
         self.counter = 0
 
     def __getitem__(self, index):
-        # if self.counter % self.len == 0:
-        #     shuffel_list(self.image1_list,self.label1_list)
-        #     shuffel_list(self.image2_list, self.label2_list)
-        #     shuffel_list(self.image3_list, self.label3_list)
-
-        # if self.transform is not None:
-        #     # img = self.transform(img)
-
         image1 = cv2.imread(self.image1_list[index], cv2.IMREAD_UNCHANGED)
         image1 = cv2.resize(image1, (256, 256))
         label1 = self.label1_list[index]
@@ -193,39 +163,12 @@ class validation_dataset(Dataset):
         gf2_mul_list = os.listdir(data_path + '/gf2_mul/val')
 
         self.image1_list, self.label1_list = get_list(gf1_pan_list, data_path + '/gf1_pan/val')
-        # for i in gf1_pan_list:
-        #     path = data_path+'/gf1_pan/train'+'/{}'.format(i)
-        #     name_list = os.listdir(path)
-        #     for _,item in enumerate(name_list):
-        #         self.image1_list.append(os.path.join(path,item))
-        #         self.label1_list.append(int(i))
         self.image2_list, self.label2_list = get_list(gf1_mul_list, data_path + '/gf1_mul/val')
-        # self.image2_list = []  # gf1_pan
-        # self.label2_list = []
-        # for i in gf1_mul_list:
-        #     path = data_path + '/gf1_mul/train' + '/{}'.format(i)
-        #     name_list = os.listdir(path)
-        #     for _, item in enumerate(name_list):
-        #         self.image2_list.append(os.path.join(path, item))
-        #         self.label2_list.append(int(i))
         self.image3_list, self.label3_list = get_list(gf2_mul_list, data_path + '/gf2_mul/val')
-        # self.image3_list = []  # gf1_pan
-        # self.label3_list = []
-        # for i in gf2_mul_list:
-        #     path = data_path + '/gf2_mul/train' + '/{}'.format(i)
-        #     name_list = os.listdir(path)
-        #     for _, item in enumerate(name_list):
-        #         self.image3_list.append(os.path.join(path, item))
-        #         self.label3_list.append(int(i))
         self.len = len(self.image1_list)
         # self.counter = 0
 
     def __getitem__(self, index):
-        # if self.counter % self.len == 0:
-        #     shuffel_list(self.image1_list,self.label1_list)
-        #     shuffel_list(self.image2_list, self.label2_list)
-        #     shuffel_list(self.image3_list, self.label3_list)
-
         image1 = cv2.imread(self.image1_list[index], cv2.IMREAD_UNCHANGED)
         image1 = cv2.resize(image1, (256, 256))
         label1 = self.label1_list[index]
