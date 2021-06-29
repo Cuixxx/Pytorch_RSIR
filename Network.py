@@ -159,6 +159,55 @@ class Spectral_Net(nn.Module):
 #     spectral_vector = torch.unsqueeze(spectral_vector, dim=1).float()
 #     return spectral_vector
 
+class gf1mulNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.Spacial_Net = SpacialNet()
+        self.Spectral_Net1 = Spectral_Net()
+        self.mixlayer = nn.Sequential(nn.Linear(1280, 1024), nn.ReLU())
+        self.hash = nn.Sequential(nn.Linear(1024, 64), nn.Tanh()).cuda()
+
+    def forward(self, img):#img1 GF1 mul,img2 GF2 mul,img3 GF1 pan
+
+        spacial_feat = self.Spacial_Net(img[:,0:3,:,:])
+        spectral_feat = self.Spectral_Net1(img)
+        mix_feat = self.mixlayer(torch.cat((spacial_feat, spectral_feat), dim=1))
+
+        hash_code = self.hash(mix_feat)
+        return mix_feat, hash_code#(-1,1)
+
+class gf2mulNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.Spacial_Net = SpacialNet()
+        self.Spectral_Net2 = Spectral_Net()
+        self.mixlayer = nn.Sequential(nn.Linear(1280, 1024), nn.ReLU())
+        self.hash = nn.Sequential(nn.Linear(1024, 64), nn.Tanh()).cuda()
+
+    def forward(self, img):#img1 GF1 mul,img2 GF2 mul,img3 GF1 pan
+
+        spacial_feat = self.Spacial_Net(img[:,0:3,:,:])
+        spectral_feat = self.Spectral_Net2(img)
+        mix_feat = self.mixlayer(torch.cat((spacial_feat, spectral_feat), dim=1))
+
+        hash_code = self.hash(mix_feat)
+        return mix_feat, hash_code#(-1,1)
+
+class gf1panNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.PAN_Net = SpacialNet_Pan()
+        self.mixlayer = nn.Sequential(nn.Linear(1280, 1024), nn.ReLU())
+        self.hash = nn.Sequential(nn.Linear(1024, 64), nn.Tanh()).cuda()
+
+    def forward(self, img):#img1 GF1 mul,img2 GF2 mul,img3 GF1 pan
+
+
+        pan_feat = self.PAN_Net(img)
+
+        hash_code = self.hash(pan_feat)
+        return pan_feat, hash_code#(-1,1)
+
 class MyModel(nn.Module):
     def __init__(self):
         super().__init__()

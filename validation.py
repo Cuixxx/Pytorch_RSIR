@@ -41,14 +41,16 @@ def load_data(path):
     return trainloader, valloader, tpath_list, vpath_list
 
 
-def catfunc(hashlike_code, label, vector, input1, input2, input3):
-    hashlike_code = torch.cat((hashlike_code, input1), 0)
+def catfunc(hash_code, label, vector, input1, input2, input3):
+    input1[input1 < 0] = 0
+    input1[input1 > 0] = 1
+
+    hash_code = torch.cat((hash_code, input1), 0)
     label = torch.cat((label, input2), 0)
     vector = torch.cat((vector, input3), 0)
 
-    hashlike_code[hashlike_code <= 0] = 0
-    hashlike_code[hashlike_code > 0] = 1
-    return hashlike_code, label, vector
+
+    return hash_code, label, vector
 
 def binary_output(dataloader, model_path, model=None):
     if model == None:
@@ -157,35 +159,7 @@ def evaluate(trn_binary, trn_label, tst_binary, tst_label, K=10):
     print('mAP:', map)
     print('Total query time:', time.time() - total_time_start)
 
-def Display(trn_binary, trn_label,trn_vector, tst_binary, tst_label, tst_vector):
-    classes = np.max(tst_label) + 1
-    for i in range(classes):
-        tst_sample_binary = tst_binary[0][
-            np.random.RandomState(seed=10).permutation(np.where(tst_label[0] == i)[0])[0]]
-        tst_sample_vector = tst_vector[0][
-            np.random.RandomState(seed=10).permutation(np.where(tst_label[0] == i)[0])[0]]
 
-        tst_sample_label = np.array([i])
-
-        query_label = tst_sample_label
-        query_binary = tst_sample_binary
-        query_result = np.count_nonzero(query_binary != trn_binary[0],
-                                        axis=1)  # haming distance   # don't need to divide binary length
-        sort_indices = np.where(query_result==0)  # np.argsort从小到大排序返回索引
-        gf1_mul_list0 = os.listdir('./gf1gf2/gf1_mul/train/0')
-        gf1_mul_list0 = [ './gf1gf2/gf1_mul/train/0/'+x for x in gf1_mul_list0]
-        gf1_mul_list1 = os.listdir('./gf1gf2/gf1_mul/train/1')
-        gf1_mul_list1 = ['./gf1gf2/gf1_mul/train/1/' + x for x in gf1_mul_list1]
-        gf1_mul_list2 = os.listdir('./gf1gf2/gf1_mul/train/2')
-        gf1_mul_list2 = ['./gf1gf2/gf1_mul/train/2/' + x for x in gf1_mul_list2]
-        gf1_mul_list3 = os.listdir('./gf1gf2/gf1_mul/train/3')
-        gf1_mul_list3 = ['./gf1gf2/gf1_mul/train/3/' + x for x in gf1_mul_list3]
-        gf1_mul_list = gf1_mul_list0+gf1_mul_list1+gf1_mul_list2+gf1_mul_list3
-        print(trn_label[0][sort_indices[0][0]])
-        img = cv2.imread(gf1_mul_list[sort_indices[0][0]], cv2.IMREAD_COLOR)
-        img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-        plt.imshow(img)
-        plt.show()
 
 
 if __name__ == "__main__":
