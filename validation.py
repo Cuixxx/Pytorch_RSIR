@@ -10,29 +10,38 @@ import data
 import Network
 import matplotlib.pyplot as plt
 import cv2
+from torchvision import  transforms
+
 parser = argparse.ArgumentParser(description='Deep Hashing evaluate mAP')
 parser.add_argument('--pretrained', type=float, default=1, metavar='pretrained_model',
                     help='loading pretrained model(default = None)')
 parser.add_argument('--bits', type=int, default=64, metavar='bts',
                     help='binary bits')
-parser.add_argument('--model', type=str, default='./models/03-22-22:05_RSIR/63.pth.tar', metavar='bts',
+parser.add_argument('--model', type=str, default='./models/06-28-15:10_RSIR/63.pth.tar', metavar='bts',
                     help='model path')
 args = parser.parse_args()
 
 
 def load_data(path):
-    trainset = data.train_dataset(path)
-    tpath_list = np.stack((trainset.image2_list,trainset.image3_list,trainset.image1_list),0)#gf1_mul,gf2_mul,gf1_pan,
+    norm_mean = [0.5, 0.5, 0.5]
+    norm_std = [0.5, 0.5, 0.5]
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(norm_mean, norm_std)]
+    )  # 归一化[-1,1]
+    trainset = data.train_dataset(path, transform=transform)
+    tpath_list = np.stack((trainset.image2_list, trainset.image3_list, trainset.image1_list), 0)#gf1_mul,gf2_mul,gf1_pan,
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=100,
                                               shuffle=False, num_workers=4)
 
-    valset = data.validation_dataset(path)
-    vpath_list = np.stack((valset.image2_list,valset.image3_list,valset.image1_list),0)
-    valloader = torch.utils.data.DataLoader(valset, batch_size=100,
-                                             shuffle=False, num_workers=4)#100
-    return trainloader, valloader,tpath_list,vpath_list
+    valset = data.validation_dataset(path, transform=transform)
+    vpath_list = np.stack((valset.image2_list, valset.image3_list, valset.image1_list), 0)
+    valloader = torch.utils.data.DataLoader(valset, batch_size=100, shuffle = False, num_workers=4)#100
 
-def catfunc(hashlike_code,label,vector,input1,input2,input3):
+    return trainloader, valloader, tpath_list, vpath_list
+
+
+def catfunc(hashlike_code, label, vector, input1, input2, input3):
     hashlike_code = torch.cat((hashlike_code, input1), 0)
     label = torch.cat((label, input2), 0)
     vector = torch.cat((vector, input3), 0)
@@ -42,12 +51,8 @@ def catfunc(hashlike_code,label,vector,input1,input2,input3):
     return hashlike_code, label, vector
 
 def binary_output(dataloader, model_path, model=None):
-    #net.load_state_dict(torch.load('./model/{}'.format(8)))
-    #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #print("Use device: " + str(device))
-    #net.to(device)
     if model == None:
-        model = Network.MyModel15()
+        model = Network.MyModel()
         model = model.cuda()
         model.load_state_dict(torch.load(model_path))
 
@@ -61,9 +66,6 @@ def binary_output(dataloader, model_path, model=None):
     gf1_pan_label = torch.LongTensor()
     gf1_pan_vector = torch.cuda.FloatTensor()
 
-    # full_batch_output = torch.cuda.FloatTensor()
-    # full_batch_label = torch.cuda.LongTensor()
-    # full_batch_vector = torch.cuda.FloatTensor()
     with torch.no_grad():
         for batch_idx, (imgs, labels) in enumerate(dataloader):
             img1 = imgs[1]#gf1_mul
@@ -76,12 +78,6 @@ def binary_output(dataloader, model_path, model=None):
             img1, img2, img3 = img1.cuda(), img2.cuda(), img3.cuda()
             vectors, outputs = model(img1, img2, img3)
 
-            # gf1_mul_hashcode = torch.cat((gf1_mul_hashcode, outputs[:100].data), 0)
-            # gf1_mul_label = torch.cat((gf1_mul_label, label1.data), 0)
-            # gf1_mul_vector = torch.cat((gf1_mul_vector, vectors[:100].data), 0)
-            #
-            # gf1_mul_hashcode[gf1_mul_hashcode <= 0] = 0
-            # gf1_mul_hashcode[gf1_mul_hashcode > 0] = 1
 
             gf1_mul_hashcode, gf1_mul_label, gf1_mul_vector = catfunc(gf1_mul_hashcode, gf1_mul_label, gf1_mul_vector, outputs[:100].data, label1.data,
                     vectors[:100].data)
@@ -90,36 +86,6 @@ def binary_output(dataloader, model_path, model=None):
             gf1_pan_hashcode, gf1_pan_label, gf1_pan_vector = catfunc(gf1_pan_hashcode, gf1_pan_label, gf1_pan_vector, outputs[200:300].data, label3.data,
                     vectors[200:300].data)
 
-            # gf2_mul_hashcode = torch.cat((gf2_mul_hashcode, outputs[100:200].data), 0)
-            # gf2_mul_label = torch.cat((gf2_mul_label, label2.data), 0)
-            # gf2_mul_vector = torch.cat((gf2_mul_vector, vectors[100:200].data), 0)
-            #
-            # gf2_mul_hashcode[gf2_mul_hashcode <= 0] = 0
-            # gf2_mul_hashcode[gf2_mul_hashcode > 0] = 1
-            #
-            #
-            #
-            # gf1_pan_hashcode = torch.cat((gf1_pan_hashcode, outputs[200:300].data), 0)
-            # gf1_pan_label = torch.cat((gf1_pan_label, label3.data), 0)
-            # gf1_pan_vector = torch.cat((gf1_pan_vector, vectors[200:300].data), 0)
-            #
-            # gf1_pan_hashcode[gf1_pan_hashcode <= 0] = 0
-            # gf1_pan_hashcode[gf1_pan_hashcode > 0] = 1
-
-            # label = torch.cat((label1, label2, label3), dim=0)#3*100
-            # label = label.cuda()
-            # full_batch_output = torch.cat((full_batch_output, outputs.data), 0)
-            # full_batch_vector = torch.cat((full_batch_vector, vectors.data), 0)
-            # full_batch_label = torch.cat((full_batch_label, label.data), 0)
-            # full_batch_output[full_batch_output < 0] = 0
-            # full_batch_output[full_batch_output > 0] = 1
-
-        # full_batch_label = full_batch_label.cpu().numpy()
-        # n1 = np.sum(np.equal(0, full_batch_label).astype(int))
-        # n2 = np.sum(np.equal(1, full_batch_label).astype(int))
-        # n3 = np.sum(np.equal(2, full_batch_label).astype(int))
-        # n4 = np.sum(np.equal(3, full_batch_label).astype(int))
-        # return full_batch_output, full_batch_label, full_batch_vector
         return gf1_mul_hashcode, gf1_mul_label, gf1_mul_vector,\
                gf2_mul_hashcode, gf2_mul_label, gf2_mul_vector,\
                gf1_pan_hashcode, gf1_pan_label, gf1_pan_vector
@@ -242,8 +208,7 @@ if __name__ == "__main__":
         np.save('./result/Tpath', Tpath)
         np.save('./result/Vpath', Vpath)
         t_gf1_mul_hashcode, t_gf1_mul_label, t_gf1_mul_vector, t_gf2_mul_hashcode, t_gf2_mul_label, t_gf2_mul_vector, t_gf1_pan_hashcode, t_gf1_pan_label, t_gf1_pan_vector = binary_output(trainloader, model_path=args.model)
-        v_gf1_mul_hashcode, v_gf1_mul_label, v_gf1_mul_vector, v_gf2_mul_hashcode, v_gf2_mul_label, v_gf2_mul_vector, v_gf1_pan_hashcode, v_gf1_pan_label, v_gf1_pan_vector = binary_output(
-            valloader, model_path=args.model)
+        v_gf1_mul_hashcode, v_gf1_mul_label, v_gf1_mul_vector, v_gf2_mul_hashcode, v_gf2_mul_label, v_gf2_mul_vector, v_gf1_pan_hashcode, v_gf1_pan_label, v_gf1_pan_vector = binary_output(valloader, model_path=args.model)
         train_binary = torch.stack((t_gf1_mul_hashcode, t_gf2_mul_hashcode, t_gf1_pan_hashcode), 0)
         train_label = torch.stack((t_gf1_mul_label, t_gf2_mul_label, t_gf1_pan_label), 0)
         train_vector = torch.stack((t_gf1_mul_vector, t_gf2_mul_vector, t_gf1_pan_vector), 0)
@@ -251,8 +216,6 @@ if __name__ == "__main__":
         val_binary = torch.stack((v_gf1_mul_hashcode, v_gf2_mul_hashcode, v_gf1_pan_hashcode), 0)
         val_label = torch.stack((v_gf1_mul_label, v_gf2_mul_label, v_gf1_pan_label), 0)
         val_vector = torch.stack((v_gf1_mul_vector, v_gf2_mul_vector, v_gf1_pan_vector), 0)
-        # train_binary, train_label, train_vector = binary_output(trainloader, model_path=args.model)
-        # val_binary, val_label, val_vector = binary_output(valloader, model_path=args.model)
         if not os.path.isdir('result'):
             os.mkdir('result')
         torch.save(train_binary, './result/train_binary')
@@ -270,8 +233,8 @@ if __name__ == "__main__":
     val_binary = val_binary.cpu().numpy()
     val_binary = np.asarray(val_binary, np.int32)
     val_label = val_label.cpu().numpy()
-    Display(trn_binary=train_binary, trn_label=train_label, trn_vector=train_vector, tst_binary=val_binary,
-            tst_label=val_label, tst_vector=val_vector)
+    # Display(trn_binary=train_binary, trn_label=train_label, trn_vector=train_vector, tst_binary=val_binary,
+    #         tst_label=val_label, tst_vector=val_vector)
     evaluate(train_binary, train_label, val_binary, val_label)
     # Display(trn_binary=train_binary,trn_label=train_label,trn_vector=train_vector,tst_binary=val_binary,tst_label=val_label,tst_vector=val_vector)
 
