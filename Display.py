@@ -34,6 +34,7 @@ class Display():
         img = Image.fromarray(img)
         img = transform(img).cuda()
         _, hash_code = self.switch.get(classifiaction)(img.unsqueeze(dim=0))
+        hash_code[hash_code > 0] = 1
         hash_code[hash_code < 0] = 0
         hash_code = hash_code.cpu().detach().numpy()
         query_result = np.count_nonzero(hash_code != self.hash_list, axis=1)

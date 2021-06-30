@@ -17,10 +17,11 @@ def upload_file():
         display = Display(path)
         img = cv2.imread(os.path.join(app.config['UPLOAD_FOLDER'], f.filename), cv2.IMREAD_UNCHANGED)
         path_list = display.run(img, 'gf1mul')
-        return render_template('result.html', path_list=path_list)
+        return render_template('result.html', paths=path_list)
 
     else:
         return render_template('upload.html')
+
 
 
 if __name__ == '__main__':
