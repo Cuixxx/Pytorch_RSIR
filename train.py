@@ -21,7 +21,7 @@ parser.add_argument('--lr', type=float, default=0.00005, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
-parser.add_argument('--epoch', type=int, default=64, metavar='epoch',
+parser.add_argument('--epoch', type=int, default=80, metavar='epoch',
                     help='epoch')
 parser.add_argument('--bits', type=int, default=64, metavar='bts',
                     help='binary bits')
@@ -57,19 +57,21 @@ class my_tensorboarx(object):
 
 
 def init_dataset(path):
-    norm_mean = [0.5, 0.5, 0.5]
-    norm_std = [0.5, 0.5, 0.5]
-    transform = transforms.Compose([
+    transform1 = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(norm_mean, norm_std)]
+        transforms.Normalize([0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5])]
     )  # 归一化[-1,1]
-    train_ds1 = data.gf1_mul_Dataset(data_path=path, transform=transform)
+    transform2 = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])]
+    )  # 归一化[-1,1]
+    train_ds1 = data.gf1_mul_Dataset(data_path=path, transform=transform1)
     train_loader1 = data.DataLoader(train_ds1, batch_size=16, shuffle=True, num_workers=8,drop_last=True)
 
-    train_ds2 = data.gf2_mul_Dataset(data_path=path, transform=transform)
+    train_ds2 = data.gf2_mul_Dataset(data_path=path, transform=transform1)
     train_loader2 = data.DataLoader(train_ds2, batch_size=16, shuffle=True, num_workers=8,drop_last=True)
 
-    train_ds3 = data.gf1_pan_Dataset(data_path=path, transform=transform)
+    train_ds3 = data.gf1_pan_Dataset(data_path=path, transform=transform2)
     train_loader3 = data.DataLoader(train_ds3, batch_size=16, shuffle=True, num_workers=8,drop_last=True)
 
     return train_loader1, train_loader2, train_loader3
@@ -78,7 +80,7 @@ def init_dataset(path):
 
 
 
-def loss_function(catlabel,hash_code,gama=5,l = 0.1):#catlabel: 3n*1 hash_code:3n*64
+def loss_function(catlabel,hash_code,gama=5,l = 0.1, margin=5):#catlabel: 3n*1 hash_code:3n*64
     length = len(hash_code)
     label = torch.zeros(length,4).scatter_(1,catlabel.reshape(-1,1),1)
     label = label.cuda()
@@ -89,18 +91,17 @@ def loss_function(catlabel,hash_code,gama=5,l = 0.1):#catlabel: 3n*1 hash_code:3
     dis_matrix = torch.abs(C+C.t()-2*B)
     # view = (dis_matrix).detach().cpu().numpy()
     mask = torch.triu(torch.ones(length, length), diagonal=1).cuda()#上三角矩阵
-    dis_matrix = dis_matrix*mask
 
     S = torch.matmul(label,label.t()).cuda()
     S_mask = S*mask
-
+    nS_mask = (1 - S) * mask
+    f1 = S_mask.sum()
+    f2 = nS_mask.sum()
     cauchy = lambda x: gama/(x+gama)
-    cauchy_matrix1 = cauchy(dis_matrix)*S_mask+(1-S_mask)
-    cauchy_matrix1=torch.clamp(cauchy_matrix1, min=0.0001, max=0.9999)
-    cauchy_matrix2 = 1-cauchy(dis_matrix*(1-S_mask))+(1-(1-S_mask)*mask)
-    cauchy_matrix2 = torch.clamp(cauchy_matrix2, min=0.0001, max=0.9999)
+    cauchy_matrix1 = (cauchy(dis_matrix)+0.0001)*S_mask+(1-S_mask)
+    cauchy_matrix2 = (1-cauchy(dis_matrix)+0.0001)*nS_mask+(1-nS_mask)
     q_loss = torch.mean((torch.abs(hash_code)-1)*(torch.abs(hash_code)-1))#是hash_code接近-1，1减少舍入误差
-    loss = -(torch.sum(torch.log(cauchy_matrix1))+torch.sum(torch.log(cauchy_matrix2)))/(length*(1+length)/2)+l*q_loss
+    loss = -(torch.sum(torch.log(cauchy_matrix1))/f1+torch.sum(torch.log(cauchy_matrix2))/f2)+l*q_loss
     return loss
 
 def train():
@@ -112,9 +113,9 @@ def train():
             img1 = img1.cuda()
             img2 = img2.cuda()
             img3 = img3.cuda()
-            cat_label = torch.cat((label1, label2, label3), dim=0)
+            cat_label = torch.cat((label1, label2, label3), dim = 0)
             _, hash_code = model(img1, img2, img3)
-            loss = loss_function(cat_label, hash_code)
+            loss = loss_function(cat_label, hash_code, margin = 5*(1-np.exp(-0.01*epoch)))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -125,7 +126,8 @@ def train():
         return train_loss/(index+1)
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
-    path = '/media/2T/cuican/code/Pytorch_RSIR/gf1gf2'
+    # path = '/media/2T/cuican/code/Pytorch_RSIR/gf1gf2'
+    path = '/media/2T/cc/salayidin/S/gf1gf2'
     trainloader1, trainloader2, trainloader3 = init_dataset(path)
 
     model = Network.MyModel()
@@ -133,7 +135,7 @@ if __name__ == '__main__':
     model.cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=0.99)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=0.999)
 
     start_epoch = 0
     now = time.strftime("%m-%d-%H:%M", time.localtime(time.time()))
@@ -152,30 +154,3 @@ if __name__ == '__main__':
         #     mAP = evaluate()
         tensorboard.draw(train_loss=loss, epoch=epoch)
     tensorboard.close()
-
-
-    # for index, ((img1, label1), (img2, label2), (img3, label3)) in enumerate(zip(trainloader1, trainloader2, trainloader3)):
-    #     spacial_img, label = get_spacialinf(img1, img2, label1, label2)
-    #     spectral_vector = get_spectralvector(img1, img2)
-    #     img_pan = torch.unsqueeze(img3, dim=1).float()  # 256 * 1 * 256 * 256
-    #
-    #     pan_vector = net3(img_pan.cuda())
-    #     spacial_vector = net1(spacial_img.cuda())
-    #     mixed_vector = net2(spectral_vector.cuda(), spacial_vector.cuda())
-    #     cat_vector = torch.cat((mixed_vector, pan_vector), dim=0)
-    #     cat_label = (*label, *label3)
-    #     hash_code = hash_function(cat_vector)
-    #     optimizer4nn = torch.optim.SGD(itertools.chain(net1.parameters(), net2.parameters(), net3.parameters()), lr=args.lr, momentum=args.momentum, weight_decay=0.0005)
-    #     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer4nn, milestones=[args.epoch], gamma=0.1)
-    #     #loss_function(cat_label, hash_code)
-    #     start_epoch = 1
-    #     if args.pretrained:
-    #         print('none')
-    #         # net.load_state_dict(torch.load('./{}/{}'.format(args.path, args.pretrained)))
-    #         # test()
-    #     else:
-    #         #if os.path.isdir('{}'.format(args.path)):
-    #         #    shutil.rmtree('{}'.format(args.path))
-    #         for epoch in range(start_epoch, start_epoch + args.epoch):
-    #             train(epoch)
-    #             scheduler.step(epoch)

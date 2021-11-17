@@ -11,30 +11,34 @@ import Network
 import matplotlib.pyplot as plt
 import cv2
 from torchvision import  transforms
+from sklearn import decomposition
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 parser = argparse.ArgumentParser(description='Deep Hashing evaluate mAP')
 parser.add_argument('--pretrained', type=float, default=1, metavar='pretrained_model',
                     help='loading pretrained model(default = None)')
 parser.add_argument('--bits', type=int, default=64, metavar='bts',
                     help='binary bits')
-parser.add_argument('--model', type=str, default='./models/06-28-15:10_RSIR/63.pth.tar', metavar='bts',
+parser.add_argument('--model', type=str, default='./models/07-20-15:34_RSIR/79.pth.tar', metavar='bts',
                     help='model path')
 args = parser.parse_args()
 
 
 def load_data(path):
-    norm_mean = [0.5, 0.5, 0.5]
-    norm_std = [0.5, 0.5, 0.5]
-    transform = transforms.Compose([
+    transform1 = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(norm_mean, norm_std)]
+        transforms.Normalize([0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5])]
     )  # 归一化[-1,1]
-    trainset = data.train_dataset(path, transform=transform)
+    transform2 = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])]
+    )  # 归一化[-1,1]
+    trainset = data.train_dataset(path, transform1=transform1,transform2=transform2)
     tpath_list = np.stack((trainset.image2_list, trainset.image3_list, trainset.image1_list), 0)#gf1_mul,gf2_mul,gf1_pan,
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=100,
                                               shuffle=False, num_workers=4)
 
-    valset = data.validation_dataset(path, transform=transform)
+    valset = data.validation_dataset(path, transform1=transform1,transform2=transform2)
     vpath_list = np.stack((valset.image2_list, valset.image3_list, valset.image1_list), 0)
     valloader = torch.utils.data.DataLoader(valset, batch_size=100, shuffle = False, num_workers=4)#100
 
@@ -78,8 +82,9 @@ def binary_output(dataloader, model_path, model=None):
             label3 = labels[0]
 
             img1, img2, img3 = img1.cuda(), img2.cuda(), img3.cuda()
+            start_time = time.time()
             vectors, outputs = model(img1, img2, img3)
-
+            print('time:{}'.format(time.time() - start_time))
 
             gf1_mul_hashcode, gf1_mul_label, gf1_mul_vector = catfunc(gf1_mul_hashcode, gf1_mul_label, gf1_mul_vector, outputs[:100].data, label1.data,
                     vectors[:100].data)
@@ -95,20 +100,21 @@ def binary_output(dataloader, model_path, model=None):
 def evaluate(trn_binary, trn_label, tst_binary, tst_label, K=10):
     classes = np.max(tst_label) + 1
     #把三个数据集数据合成一个
-    trn_binary = np.concatenate((trn_binary[0], trn_binary[1], trn_binary[2]), axis=0)
-    trn_label = np.concatenate((trn_label[0], trn_label[1], trn_label[2]), axis=0)
-    tst_binary = np.concatenate((tst_binary[0], tst_binary[1], tst_binary[2]), axis=0)
-    tst_label = np.concatenate((tst_label[0], tst_label[1], tst_label[2]), axis=0)
+    # trn_binary = np.concatenate((trn_binary[0], trn_binary[1], trn_binary[2]), axis=0)
+    # trn_label = np.concatenate((trn_label[0], trn_label[1], trn_label[2]), axis=0)
+    # tst_binary = np.concatenate((tst_binary[0], tst_binary[1], tst_binary[2]), axis=0)
+    # tst_label = np.concatenate((tst_label[0], tst_label[1], tst_label[2]), axis=0)
 
-    for i in range(classes):
-        if i == 0:
-            tst_sample_binary = tst_binary[np.random.RandomState(seed=i+1).permutation(np.where(tst_label == i)[0])[:100]]
-            tst_sample_label = np.array([i]).repeat(100)
-            continue
-        else:
-            tst_sample_binary = np.concatenate([tst_sample_binary, tst_binary[np.random.RandomState(seed=i+1).permutation(np.where(tst_label==i)[0])[:100]]])
-            tst_sample_label = np.concatenate([tst_sample_label, np.array([i]).repeat(100)])
-
+    # for i in range(classes):
+    #     if i == 0:
+    #         tst_sample_binary = tst_binary[np.random.RandomState(seed=i+1).permutation(np.where(tst_label == i)[0])[:100]]
+    #         tst_sample_label = np.array([i]).repeat(100)
+    #         continue
+    #     else:
+    #         tst_sample_binary = np.concatenate([tst_sample_binary, tst_binary[np.random.RandomState(seed=i+1).permutation(np.where(tst_label==i)[0])[:100]]])
+    #         tst_sample_label = np.concatenate([tst_sample_label, np.array([i]).repeat(100)])
+    tst_sample_binary = tst_binary
+    tst_sample_label = tst_label
     query_times = tst_sample_binary.shape[0]#10*100
     trainset_len = trn_binary.shape[0]#50000
     AP = np.zeros(query_times)#一次检索一个AP
@@ -140,33 +146,52 @@ def evaluate(trn_binary, trn_label, tst_binary, tst_label, K=10):
     precision_at_k = sum_tp / Ns / query_times
     recall = recall / query_times
 
-    plt.plot(recall, precision_at_k)
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    plt.xlabel('rec')
-    plt.ylabel('pre')
-    plt.title('PR-curve')
-
-    plt.plot()
-    plt.savefig('./fig1.png',dpi=300)
-    plt.show()
-
-    index = [100, 500, 1000, 2000, 5000]
-    index = [i - 1 for i in index]
-    print('precision at k:', precision_at_k[index])
-    print('precision within Hamming radius 2:', np.mean(precision_radius))
+    # plt.plot(recall, precision_at_k)
+    # plt.xlim(0, 1)
+    # plt.ylim(0, 1)
+    # plt.xlabel('rec')
+    # plt.ylabel('pre')
+    # plt.title('PR-curve')
+    #
+    # plt.plot()
+    # plt.savefig('./fig1.png',dpi=300)
+    # plt.show()
+    #
+    # index = [100, 500, 1000, 2000, 5000]
+    # index = [i - 1 for i in index]
+    # print('precision at k:', precision_at_k[index])
+    # print('precision within Hamming radius 2:', np.mean(precision_radius))
     map = np.mean(AP)
     print('mAP:', map)
-    print('Total query time:', time.time() - total_time_start)
+    # print('Total query time:', time.time() - total_time_start)
 
 
 
+def visulization(val_vector,val_label):
+    lda = LinearDiscriminantAnalysis(n_components=2)
+
+    pca = decomposition.PCA(n_components=2)
+    vectors = torch.cat((val_vector[0], val_vector[1], val_vector[2]), dim=0).cpu().detach()
+    labels = torch.cat((val_label[0], val_label[1], val_label[2]), dim=0).cpu().detach()
+    pca.fit(vectors)
+    lda.fit(vectors, labels)
+    # pca.fit(val_vector[2].cpu().detach())
+    vector1 = pca.transform(val_vector[0].cpu().detach())
+    vector2 = pca.transform(val_vector[1].cpu().detach())
+    vector3 = pca.transform(val_vector[2].cpu().detach())
+    plt.scatter(vector1[:, 0], vector1[:, 1], marker='o', c=val_label[0])
+    plt.show()
+    plt.scatter(vector2[:, 0], vector2[:, 1], marker='*', c=val_label[1])
+    plt.show()
+    plt.scatter(vector3[:, 0], vector3[:, 1], marker='v', c=val_label[2])
+    plt.show()
 
 if __name__ == "__main__":
-    path = '/media/2T/cuican/code/Pytorch_RSIR/gf1gf2'
+    # path = '/media/2T/cuican/code/Pytorch_RSIR/gf1gf2'
+    path = '/media/2T/cc/salayidin/S/gf1gf2'
     if os.path.exists('./result/train_binary') and os.path.exists('./result/train_label')\
             and os.path.exists('./result/val_binary') and os.path.exists('./result/val_label')\
-            and os.path.exists('./result/train_vector')and os.path.exists('./result/val_vector'):
+            and os.path.exists('./result/train_vector')and os.path.exists('./result/val_vector') and 0:
 
         Tpath = np.load('./result/Tpath.npy')
         Vpath = np.load('./result/Vpath.npy')
@@ -179,8 +204,7 @@ if __name__ == "__main__":
 
     else:
         trainloader, valloader,Tpath,Vpath = load_data(path)
-        np.save('./result/Tpath', Tpath)
-        np.save('./result/Vpath', Vpath)
+
         t_gf1_mul_hashcode, t_gf1_mul_label, t_gf1_mul_vector, t_gf2_mul_hashcode, t_gf2_mul_label, t_gf2_mul_vector, t_gf1_pan_hashcode, t_gf1_pan_label, t_gf1_pan_vector = binary_output(trainloader, model_path=args.model)
         v_gf1_mul_hashcode, v_gf1_mul_label, v_gf1_mul_vector, v_gf2_mul_hashcode, v_gf2_mul_label, v_gf2_mul_vector, v_gf1_pan_hashcode, v_gf1_pan_label, v_gf1_pan_vector = binary_output(valloader, model_path=args.model)
         train_binary = torch.stack((t_gf1_mul_hashcode, t_gf2_mul_hashcode, t_gf1_pan_hashcode), 0)
@@ -192,6 +216,8 @@ if __name__ == "__main__":
         val_vector = torch.stack((v_gf1_mul_vector, v_gf2_mul_vector, v_gf1_pan_vector), 0)
         if not os.path.isdir('result'):
             os.mkdir('result')
+        np.save('./result/Tpath', Tpath)
+        np.save('./result/Vpath', Vpath)
         torch.save(train_binary, './result/train_binary')
         torch.save(train_label, './result/train_label')
         torch.save(train_vector, './result/train_vector')
@@ -199,7 +225,7 @@ if __name__ == "__main__":
         torch.save(val_label, './result/val_label')
         torch.save(val_vector, './result/val_vector')
 
-
+    # visulization(val_binary, val_label)
     train_binary = train_binary.cpu().numpy()
     train_binary = np.asarray(train_binary, np.int32)
     train_label = train_label.cpu().numpy()
@@ -209,7 +235,13 @@ if __name__ == "__main__":
     val_label = val_label.cpu().numpy()
     # Display(trn_binary=train_binary, trn_label=train_label, trn_vector=train_vector, tst_binary=val_binary,
     #         tst_label=val_label, tst_vector=val_vector)
-    evaluate(train_binary, train_label, val_binary, val_label)
+    # evaluate(train_binary, train_label, val_binary, val_label)
     # Display(trn_binary=train_binary,trn_label=train_label,trn_vector=train_vector,tst_binary=val_binary,tst_label=val_label,tst_vector=val_vector)
-
+    for i in range(3):
+        tst_binary = val_binary[i]
+        tst_label = val_label[i]
+        for j in range(3):
+            trn_binary = train_binary[j]
+            trn_label = train_label[j]
+            evaluate(trn_binary, trn_label, tst_binary, tst_label)
 

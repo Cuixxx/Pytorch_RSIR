@@ -120,7 +120,7 @@ def shuffel_list(img_list, img_label):
 
 
 class train_dataset(Dataset):
-    def __init__(self, data_path, transform = None):
+    def __init__(self, data_path, transform1 = None,transform2 = None):
         gf1_pan_list = os.listdir(data_path+'/gf1_pan/train')
         gf1_pan_list.sort(key = lambda x: int(x))
         gf1_mul_list = os.listdir(data_path+'/gf1_mul/train')
@@ -131,7 +131,8 @@ class train_dataset(Dataset):
         self.image1_list, self.label1_list = get_list(gf1_pan_list, data_path + '/gf1_pan/train')
         self.image2_list, self.label2_list = get_list(gf1_mul_list, data_path + '/gf1_mul/train')
         self.image3_list, self.label3_list = get_list(gf2_mul_list, data_path + '/gf2_mul/train')
-        self.transform = transform
+        self.transform1 = transform1
+        self.transform2 = transform2
         self.len = len(self.image1_list)
 
     def __getitem__(self, index):
@@ -152,10 +153,12 @@ class train_dataset(Dataset):
         image2 = Image.fromarray(image2)
         image3 = Image.fromarray(image3)
 
-        if self.transform:
-            image1 = self.transform(image1)
-            image2 = self.transform(image2)
-            image3 = self.transform(image3)
+        if self.transform2:
+            image1 = self.transform2(image1)
+
+        if self.transform1:
+            image2 = self.transform1(image2)
+            image3 = self.transform1(image3)
 
 
         return [image1, image2, image3], (label1, label2, label3)
@@ -165,7 +168,7 @@ class train_dataset(Dataset):
 
 
 class validation_dataset(Dataset):
-    def __init__(self, data_path, transform):
+    def __init__(self, data_path, transform1 = None,transform2 = None):
         gf1_pan_list = os.listdir(data_path+'/gf1_pan/val')
         gf1_mul_list = os.listdir(data_path+'/gf1_mul/val')
         gf2_mul_list = os.listdir(data_path + '/gf2_mul/val')
@@ -174,7 +177,8 @@ class validation_dataset(Dataset):
         self.image2_list, self.label2_list = get_list(gf1_mul_list, data_path + '/gf1_mul/val')
         self.image3_list, self.label3_list = get_list(gf2_mul_list, data_path + '/gf2_mul/val')
         self.len = len(self.image1_list)
-        self.transform = transform
+        self.transform1 = transform1
+        self.transform2 = transform2
         # self.counter = 0
 
     def __getitem__(self, index):
@@ -194,16 +198,16 @@ class validation_dataset(Dataset):
         image2 = Image.fromarray(image2)
         image3 = Image.fromarray(image3)
 
-        if self.transform:
-            image1 = self.transform(image1)
-            image2 = self.transform(image2)
-            image3 = self.transform(image3)
+        if self.transform1:
+            image2 = self.transform1(image2)
+            image3 = self.transform1(image3)
+        if self.transform2:
+            image1 = self.transform2(image1)
 
         return [image1, image2, image3], (label1, label2, label3)
 
     def __len__(self):
         return self.len
-
 
 def init_dataset(path):
     #path = '/media/2T/cc/salayidin/S/gf1gf2'
